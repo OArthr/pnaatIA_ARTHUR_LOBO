@@ -2,73 +2,195 @@
 
 👤 Identificação: **Arthur Lobo Feitosa de Oliveira**
 
-## 1️⃣ Resumo da Arquitetura do Modelo
 
-No arquivo `train_model.py`, a arquitetura da **CNN** implementada consiste em:
+# Visão Geral do Projeto
 
-### Extração de detalhes
+Este projeto consiste no desenvolvimento de uma Rede Neural Convolucional (CNN) para classificação de dígitos (0–9), seguido de sua otimização para execução em ambientes com recursos limitados (edge) utilizando TensorFlow Lite.
 
-* Duas camadas de convolução, utilizando um filtro kernel 3x3 e a função de ativação ReLU.
+O foco não foi apenas obter alta acurácia, mas também explorar o equilíbrio entre:
 
-Elas são usadas para extrair características da imagem de input, destacando onde na imagem o padrão definido pelo filtro foi detectado mais intensamente.
+- Desempenho
+- Custo computacional
+- Tamanho do modelo
 
-* Entre as camadas de convolução, há uma camada de Pooling Máximo 2x2.
+O pipeline completo inclui:
 
-Usada para reduzir o tamanho do mapa de características obtido após a primeira camada de convolução, simplificando futuros cálculos e tornando o modelo mais robusto ao reduzir o risco de overfitting.
-
-* Após a segunda convolução, realizamos a operação de flatten.
-
-Para transformar o mapa de características em um vetor unidimensional, preparando-o para a rede neural.
-
-### Classificação
-
-* Uma camada densa interna de 128 neurônios.
-
-Onde ocorre a mágica do modelo, analisando as características obtidas e retornando valores para a próxima camada, com base em pesos que são ajustados durante o treinamento, efetivamente aprendendo a classificar corretamente.
-
-* Uma camada dropout de 128 neurônios e com regularização de 50%.
-
-Onde alguns neurônios são desativados durante o treino para a rede aprender de forma mais distribuida, combatendo o overfitting.
-
-* Uma última camada densa de apenas 10 neurônios.
-
-Representando a camada de saída da rede, onde os valores finais em cada neurônio representam a escolha do classificador.
+1. Preparação dos dados
+2. Treinamento da CNN
+3. Avaliação (incluindo matriz de confusão)
+4. Conversão e otimização para TensorFlow Lite
 
 
-## 2️⃣ Bibliotecas Utilizadas
+# 1️⃣ Arquitetura do Modelo
 
-* Keras de Tensorflow: Principal biblioteca que permite utilizar os modelos e as camadas, bem como o otimizador e métodos para realizar o treinamento do modelo
-* Pyplot de Matplotlib: Utilizado durante o desenvolvimento do programa para facilitar o entendimento e vizualisação dos resultados das épocas do treinamento.
+Definida em `train_model.py`.
+
+A arquitetura foi projetada para ser **leve e eficiente**, adequada para uso em edge.
 
 
+## 🔹 Extração de características
 
-## 3️⃣ Técnica de Otimização do Modelo
+* `Conv2D(16, 3x3, ReLU)`
+* `MaxPooling2D(2x2)`
 
-No arquivo `optimize_model.py`, a técnica utilizada para otimizar o modelo foi a Quantização Pós-Treinamento. Implementada no bloco:
+Captura padrões básicos como bordas e formas simples.
 
-```py
-converter = tf.lite.TFLiteConverter.from_keras_model(model)
+* `Conv2D(32, 3x3, ReLU)`
+* `MaxPooling2D(2x2)`
+
+Captura padrões intermediários como curvas e junções.
+
+* `Conv2D(64, 3x3, ReLU)`
+
+Captura características mais complexas dos dígitos.
+
+
+## 🔹 Redução de dimensionalidade
+
+* `GlobalAveragePooling2D()`
+
+Substitui o uso de Flatten, reduzindo drasticamente o número de parâmetros e tornando o modelo mais eficiente para dispositivos com pouca memória.
+
+
+## 🔹 Classificação
+
+* `Dense(32, ReLU)`
+* `Dense(10, Softmax)`
+
+Realiza a classificação final dos dígitos.
+
+## 🔹 Resumo do modelo no terminal
+
+![](images/resumo_modelo.png)
+
+
+# 2️⃣ Treinamento
+
+O modelo então é treinado em 5 épocas com as amostras de dados dedicadas, com as seguintes configurações:
+
+* Otimizador: Adam (`learning_rate = 0.001`)
+* Função de perda: `sparse_categorical_crossentropy`
+* Métrica: `accuracy`
+
+Ao fim de cada época, são coletados os valores da precisão e perda de treinamento e de validação, respectivamente, para serem exibidos ao final.
+
+Observamos valores de acurácia de validação elevados (>90%) até mesmo ao final da primeira época, convergindo rapidamente a valores próximos de 98% até o final do treinamento.
+
+![](images/acuracia.png)
+
+
+![](images/perda.png)
+
+
+# 3️⃣ Avaliação do Modelo
+
+Após o treinamento:
+
+* Avaliação no conjunto de teste
+* Geração da **matriz de confusão**
+
+## 🔹 Matriz de confusão
+
+Permite identificar:
+
+* Quais dígitos são mais confundidos
+* Padrões de erro do modelo
+
+Visualizada usando Seaborn.
+
+![](images/matriz_confusao.png)
+
+
+# 4️⃣ Otimização para TensorFlow Lite
+
+Definida em `optimize_model.py`.
+
+O projeto aplica **duas técnicas de quantização pós-treinamento**:
+
+
+### 🔹 1. Dynamic Range Quantization
+
+```python
 converter.optimizations = [tf.lite.Optimize.DEFAULT]
-tflite_model = converter.convert()
 ```
 
+### Características:
 
-## 4️⃣ Resultados Obtidos
+* Converte pesos para int8
+* Não requer dataset representativo
+* Redução significativa de tamanho
 
-Após as cinco épocas de treinamentro da CNN, obtivemos uma accuracy final entre 0.98 e 0.99, com valor de perda de apenas aproximadamente 0.04. Até no final da primeira época do treinamento, a precisão já estava acima de 90%, com aumentos menores a cada época.
+E então é salvo como `model.tflite`.
 
 
+### 🔹 2. Quantização Float16
 
-## 5️⃣ Comentários Adicionais (Opcional)
+```python
+converter.target_spec.supported_types = [tf.float16]
+```
 
-### Dificuldades encontradas
+### Características:
 
-Dificuldades em entender o fluxo de trabalho com as bibliotecas necessárias, sendo necessário buscar a documentação e seguir os exemplos definidos nos cursos EAD.
+* Reduz pesos de float32 → float16
+* Mantém alta precisão
+* Ideal para GPU e dispositivos com suporte a float16
 
-### Aprendizados durante o desafio
+Salvo como `model_float16.tflite`
 
-- Conhecer de forma mais aprofundada e prática o processo de criação e treinamento de um modelo de aprendizado de máquina. 
 
-- Compreender todo o processo realizado para o treinamento e classificação, antes mesmo das camadas de neurônios, como a convolução e outras camadas e como são utilizadas para otimizar o modelo e combater o overtiffing. 
+# 5️⃣ Resultados Obtidos
 
-- Além disso, nas camadas de classificação também foi possível conhecer a camada de dropout, entendendo sua funcionalidade e sua importância para um aprendizado mais distribuido e robusto.
+* Acurácia final: **~98%**
+* Loss final: **~0.05**
+
+### 🔹 Observações:
+
+* Alta performance já nas primeiras épocas (próximos de 90%)
+* Ganhos marginais nas épocas seguintes
+* Modelo converge rapidamente
+
+# 6️⃣ Decisões de Projeto
+
+### Uso de GlobalAveragePooling
+
+* Reduz número de parâmetros
+* Melhora eficiência para edge
+* Evita overfitting comparado ao Flatten
+
+### Arquitetura compacta
+
+* Poucas camadas
+* Filtros pequenos (3x3)
+* Baixo custo computacional
+
+### Quantização pós-treinamento
+
+* Permite deploy eficiente sem re-treinamento
+
+
+#  7️⃣ Possíveis Melhorias
+
+* Quantização inteira (int8) com dataset representativo
+* Uso de Depthwise Separable Convolutions (MobileNet-style)
+* Aplicação de pruning
+* Avaliação de latência em hardware real
+
+
+#  8️⃣ Aprendizados
+
+* Construção completa de pipeline de ML
+* Funcionamento de CNNs na prática
+* Importância da validação
+* Técnicas de otimização para edge (TFLite)
+
+
+# 9️⃣ Dificuldades
+
+* Entendimento inicial do fluxo com TensorFlow/Keras
+* Configuração correta do pipeline de dados
+* Interpretação das métricas de validação
+
+
+# 🔟 Conclusão
+
+O projeto demonstra a construção de uma CNN eficiente e sua adaptação para execução em dispositivos com recursos limitados, mantendo alta acurácia e baixo custo computacional.
